@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>甜甜消消乐 · Match 3</title>
+<style>
+  :root {
+    --cell: clamp(34px, 6.4vw, 56px);
+    --gap: 4px;
+    --board-size: calc(8 * var(--cell) + 7 * var(--gap));
+    --ink: #3b2b52;
+    --muted: #8b7ea5;
+    --pink: #ff6fa5;
+    --pink-dark: #e84c87;
+    --cream: #fff8f2;
+    --panel: #ffffff;
+    --line: #f0e6f4;
+    --shadow: 0 18px 45px rgba(103, 62, 132, .16);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+    color: var(--ink);
+    background:
+      radial-gradient(circle at 12% 12%, #ffe1ef 0, transparent 32%),
+      radial-gradient(circle at 88% 8%, #dcf1ff 0, transparent 30%),
+      radial-gradient(circle at 50% 100%, #fff0d6 0, transparent 42%),
+      #f7f3fb;
+  }
+  .app { max-width: 1080px; margin: 0 auto; padding: 26px 20px 48px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 22px; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 50px; height: 50px; border-radius: 16px; display: grid; place-items: center;
+    font-size: 28px; background: linear-gradient(145deg, #ff9ec2, #ff5f98);
+    box-shadow: 0 8px 18px rgba(255, 95, 152, .32); transform: rotate(-6deg);
+  }
+  .brand h1 { margin: 0; font-size: 25px; letter-spacing: .5px; }
+  .brand p { margin: 3px 0 0; color: var(--muted); font-size: 13px; }
+  .top-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .top-actions button.off { opacity: .5; text-decoration: line-through; }
+  button {
+    font-family: inherit; cursor: pointer; border: 0; color: var(--ink);
+    background: #fff; border-radius: 12px; padding: 10px 16px; font-size: 14px; font-weight: 700;
+    box-shadow: 0 4px 12px rgba(103, 62, 132, .12); transition: transform .15s, box-shadow .15s, filter .15s;
+  }
+  button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 18px rgba(103, 62, 132, .18); }
+  button:active:not(:disabled) { transform: translateY(0); }
+  button:disabled { opacity: .45; cursor: not-allowed; box-shadow: none; }
+  button.primary { background: linear-gradient(145deg, #ff83b2, var(--pink-dark)); color: #fff; box-shadow: 0 8px 18px rgba(232, 76, 135, .3); }
+  button.ghost { background: #fff; }
+
+  .layout { display: flex; align-items: flex-start; gap: 22px; flex-wrap: wrap; }
+  .game-card {
+    background: var(--panel); border-radius: 26px; padding: 20px;
+    box-shadow: var(--shadow); border: 1px solid #fbe9f2; flex: 0 0 auto;
+  }
+  .hud { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 14px; }
+  .stat {
+    background: linear-gradient(160deg, #fff, #fff4f8); border: 1px solid var(--line);
+    border-radius: 16px; padding: 10px 14px; min-width: 118px;
+  }
+  .stat .label { font-size: 12px; color: var(--muted); font-weight: 700; }
+  .stat .value { font-size: 24px; font-weight: 800; line-height: 1.15; }
+  .stat .value small { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .goal-strip {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    background: #f8f4ff; border: 1px solid var(--line); border-radius: 14px;
+    padding: 9px 12px; margin-bottom: 14px; min-height: 46px;
+  }
+  .goal-label { font-size: 12px; font-weight: 800; color: var(--muted); }
+  .goal-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px;
+    border-radius: 999px; background: #fff; border: 1px solid var(--line);
+    font-size: 13px; font-weight: 800; transition: transform .2s, background .2s;
+  }
+  .goal-chip.done { background: #e5f9ec; border-color: #b6e8c6; color: #21844a; }
+  .goal-chip .ico { font-size: 17px; }
+  .goal-chip b { font-variant-numeric: tabular-nums; }
+
+  .board-wrap { position: relative; width: var(--board-size); height: var(--board-size); }
+  .board {
+    position: absolute; inset: 0; border-radius: 20px; padding: 0;
+    background: linear-gradient(145deg, #fff0f6, #e9f2ff);
+    box-shadow: inset 0 3px 14px rgba(120, 80, 160, .12);
+    touch-action: none; user-select: none; overflow: hidden;
+  }
+  .tile {
+    position: absolute; width: var(--cell); height: var(--cell);
+    border-radius: 14px; display: grid; place-items: center;
+    font-size: calc(var(--cell) * .58); line-height: 1; cursor: pointer;
+    transition: left .19s ease, top .3s cubic-bezier(.3, .9, .35, 1.15), transform .16s, opacity .24s, box-shadow .16s;
+    box-shadow: inset 0 -4px 0 rgba(0,0,0,.09), inset 0 3px 0 rgba(255,255,255,.65), 0 3px 8px rgba(90,60,120,.13);
+    will-change: left, top, transform, opacity;
+  }
+  .tile .badge {
+    position: absolute; right: 3px; bottom: 1px; font-size: calc(var(--cell) * .26);
+    text-shadow: 0 1px 2px rgba(0,0,0,.25); pointer-events: none;
+  }
+  .tile.selected { transform: scale(.9); box-shadow: 0 0 0 3px #fff, 0 0 0 6px var(--pink), 0 6px 16px rgba(232,76,135,.4); z-index: 4; }
+  .tile.hint { animation: hintPulse .7s ease-in-out 2; z-index: 3; }
+  .tile.clearing { animation: popOut .26s ease-in forwards; z-index: 5; }
+  .tile.spawn { animation: dropIn .3s ease-out; }
+  .tile.special-make { animation: makeSpecial .42s ease-out; z-index: 6; }
+  @keyframes popOut { 0% { transform: scale(1); opacity: 1; } 55% { transform: scale(1.25) rotate(8deg); opacity: 1; } 100% { transform: scale(.1) rotate(20deg); opacity: 0; } }
+  @keyframes dropIn { 0% { filter: brightness(1.5); } 100% { filter: brightness(1); } }
+  @keyframes makeSpecial { 0% { transform: scale(.6); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  @keyframes hintPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.14); box-shadow: 0 0 0 4px rgba(255,255,255,.9), 0 0 0 8px rgba(255,111,165,.55); } }
+  @keyframes scorePulse { 0% { transform: scale(1); } 45% { transform: scale(1.16); } 100% { transform: scale(1); } }
+  .value.pulse { animation: scorePulse .34s ease-out; display: inline-block; }
+
+  .fx-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 10; }
+  .float-score {
+    position: absolute; font-weight: 900; font-size: 17px; color: #fff;
+    text-shadow: 0 2px 0 var(--pink-dark), 0 4px 10px rgba(120,50,90,.35);
+    animation: floatUp .9s ease-out forwards; white-space: nowrap; transform: translateX(-50%);
+  }
+  @keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, 8px) scale(.7); } 25% { opacity: 1; transform: translate(-50%, -10px) scale(1.1); } 100% { opacity: 0; transform: translate(-50%, -58px) scale(1); } }
+  .combo-banner {
+    position: absolute; left: 50%; top: 44%; transform: translate(-50%, -50%);
+    font-size: clamp(19px, 3.6vw, 29px); font-weight: 900; color: #fff;
+    text-shadow: 0 3px 0 #d64583, 0 8px 20px rgba(150,50,100,.4);
+    animation: comboPop .8s ease-out forwards; white-space: nowrap;
+  }
+  @keyframes comboPop { 0% { opacity: 0; transform: translate(-50%,-50%) scale(.4) rotate(-7deg); } 30% { opacity: 1; transform: translate(-50%,-50%) scale(1.16) rotate(3deg); } 100% { opacity: 0; transform: translate(-50%,-80%) scale(1); } }
+
+  .overlay {
+    position: absolute; inset: 0; border-radius: 20px; z-index: 20;
+    background: rgba(59, 43, 82, .42); backdrop-filter: blur(4px);
+    display: grid; place-items: center; padding: 16px;
+  }
+  .overlay.hidden { display: none; }
+  .dialog {
+    width: min(92%, 310px); background: #fff; border-radius: 22px; padding: 24px 20px;
+    text-align: center; box-shadow: 0 18px 40px rgba(50,30,80,.28);
+    animation: dialogIn .3s cubic-bezier(.2,1.2,.4,1);
+  }
+  @keyframes dialogIn { from { transform: translateY(18px) scale(.9); opacity: 0; } to { transform: none; opacity: 1; } }
+  .dialog .ov-icon { font-size: 46px; }
+  .dialog h2 { margin: 8px 0 4px; font-size: 23px; }
+  .dialog p { margin: 0 0 16px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+  .dialog-btns { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+  .levels-panel {
+    position: fixed; inset: 0; z-index: 60; background: rgba(59, 43, 82, .46);
+    backdrop-filter: blur(5px); display: grid; place-items: center; padding: 20px;
+  }
+  .levels-panel.hidden { display: none; }
+  .levels-dialog {
+    width: min(94%, 640px); max-height: 86vh; overflow: auto; background: #fff;
+    border-radius: 26px; padding: 22px 24px 26px; box-shadow: 0 22px 55px rgba(50,30,80,.32);
+    animation: dialogIn .28s cubic-bezier(.2,1.2,.4,1);
+  }
+  .levels-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .levels-head h2 { margin: 0; font-size: 20px; }
+  .levels-sub { margin: 0 0 14px; font-size: 12px; color: var(--muted); }
+  .levels-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); gap: 11px; }
+  .level-cell {
+    aspect-ratio: 1; border-radius: 16px; border: 1px solid var(--line); background: #faf6ff;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    cursor: pointer; transition: transform .15s, box-shadow .15s;
+  }
+  .level-cell:hover:not(.locked) { transform: translateY(-3px); box-shadow: 0 9px 18px rgba(103,62,132,.18); }
+  .level-cell .num { font-size: 20px; font-weight: 800; line-height: 1; }
+  .level-cell .stars { font-size: 12px; line-height: 1; letter-spacing: 1px; }
+  .level-cell .score { font-size: 10px; color: var(--muted); }
+  .level-cell.done { background: linear-gradient(160deg, #fff3d9, #ffe3b4); border-color: #ffd08a; }
+  .level-cell.current { background: linear-gradient(160deg, #ffe6f0, #ffc6dc); border-color: var(--pink); box-shadow: 0 0 0 3px rgba(255,111,165,.22); }
+  .level-cell.locked { opacity: .42; cursor: not-allowed; background: #f1f0f4; }
+
+  .toast {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    background: rgba(59,43,82,.86); color: #fff; font-size: 12px; font-weight: 700;
+    padding: 7px 14px; border-radius: 999px; opacity: 0; pointer-events: none; z-index: 15;
+    transition: opacity .2s, bottom .2s; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; bottom: 20px; }
+
+  .toolbar { display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .tool {
+    flex: 1 1 108px; min-width: 100px; border-radius: 14px; padding: 9px 8px;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    background: #fff; border: 1px solid var(--line); font-size: 13px; font-weight: 800;
+  }
+  .tool .ico { font-size: 19px; }
+  .tool .count {
+    background: var(--pink); color: #fff; border-radius: 999px; font-size: 11px;
+    min-width: 18px; height: 18px; display: inline-grid; place-items: center; padding: 0 4px;
+  }
+
+  .side {
+    flex: 1 1 290px; min-width: 270px; max-width: 380px;
+    background: var(--panel); border-radius: 26px; padding: 22px;
+    box-shadow: var(--shadow); border: 1px solid var(--line);
+  }
+  .side h2 { font-size: 17px; margin: 0 0 14px; }
+  .rule-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 12px; }
+  .rule-list li { display: flex; gap: 10px; font-size: 13px; line-height: 1.55; color: #6c5c82; }
+  .rule-list .num {
+    flex: 0 0 24px; height: 24px; border-radius: 8px; display: grid; place-items: center;
+    background: #ffe3ef; color: var(--pink-dark); font-size: 12px; font-weight: 900;
+  }
+  .rule-list b { color: var(--ink); }
+  .legend { margin-top: 18px; padding-top: 16px; border-top: 1px dashed var(--line); }
+  .legend h3 { font-size: 13px; margin: 0 0 10px; color: var(--muted); }
+  .legend-row { display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 7px; color: #6c5c82; }
+  .legend-row span.mini {
+    width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center;
+    font-size: 14px; background: #fff2f7; border: 1px solid var(--line);
+  }
+  .tip-note { margin-top: 16px; font-size: 12px; color: var(--muted); line-height: 1.6; }
+  @media (max-width: 820px) {
+    .layout { justify-content: center; }
+    .side { max-width: 520px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark">🍬</div>
+      <div>
+        <h1>甜甜消消乐</h1>
+        <p>交换相邻糖果 · 三连消除 · 连锁得分</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="ghost" id="levelsBtn">🗺️ 关卡总览</button>
+      <button class="ghost" id="musicBtn">🎵 音乐开</button>
+      <button class="ghost" id="soundBtn">🔊 音效开</button>
+      <button class="ghost" id="restartBtn">↻ 重新开始</button>
+    </div>
+  </div>
+
+  <div class="layout">
+    <section class="game-card">
+      <div class="hud">
+        <div class="stat"><div class="label">关卡 LEVEL</div><div class="value" id="levelVal">1</div></div>
+        <div class="stat"><div class="label">得分 SCORE</div><div class="value" id="scoreVal">0</div></div>
+        <div class="stat"><div class="label">剩余步数 MOVES</div><div class="value" id="movesVal">20</div></div>
+      </div>
+      <div class="goal-strip"><span class="goal-label">本关目标</span><div id="goals"></div></div>
+
+      <div class="board-wrap">
+        <div id="board" class="board"></div>
+        <div id="fx" class="fx-layer"></div>
+        <div id="toast" class="toast"></div>
+        <div id="overlay" class="overlay hidden">
+          <div class="dialog">
+            <div class="ov-icon" id="ovIcon">🏆</div>
+            <h2 id="ovTitle">过关！</h2>
+            <p id="ovText"></p>
+            <div class="dialog-btns">
+              <button class="primary" id="ovPrimary">下一关</button>
+              <button class="ghost" id="ovSecondary">重玩本关</button>
+              <button class="ghost" id="ovLevelsBtn">🗺️ 总览</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="toolbar">
+        <button class="tool" id="hintBtn"><span class="ico">💡</span>提示<span class="count" id="hintCount">2</span></button>
+        <button class="tool" id="shuffleBtn"><span class="ico">🔀</span>洗牌<span class="count" id="shuffleCount">2</span></button>
+        <button class="tool" id="extraBtn"><span class="ico">➕</span>+5 步<span class="count" id="extraCount">2</span></button>
+      </div>
+    </section>
+
+    <aside class="side">
+      <h2>玩法与机制（参考多款消消乐）</h2>
+      <ul class="rule-list">
+        <li><span class="num">1</span><div><b>交换消除</b>：点击两个相邻糖果（或拖动）交换位置，只有交换后能凑成横向/纵向 <b>3 个及以上</b> 同色才算有效，否则自动换回。</div></li>
+        <li><span class="num">2</span><div><b>三消与大连消</b>：3 个基础消除；4 连生成条纹糖（清整行/列），T/L 形 5 连生成包装糖（炸 3×3），5 连直线生成彩糖炸弹（清同色全部）。</div></li>
+        <li><span class="num">3</span><div><b>连锁与掉落</b>：消除后上方糖果下落、顶部补充新糖果；若补位后再次成三，会自动连续消除，连锁倍率逐次提高。</div></li>
+        <li><span class="num">4</span><div><b>计分与目标</b>：每颗糖果 10 分 × 连锁层数；本关目标是收集指定颜色或达到分数，达成即胜利。</div></li>
+        <li><span class="num">5</span><div><b>限制与失败</b>：每关步数有限，步数耗尽仍未完成目标即失败；道具可提示、洗牌或加步。</div></li>
+      </ul>
+      <div class="legend">
+        <h3>特殊糖果</h3>
+        <div class="legend-row"><span class="mini">🍓↔</span>条纹糖：清整行（↕ 为整列）</div>
+        <div class="legend-row"><span class="mini">🍋✦</span>包装糖：爆炸清除周围 3×3</div>
+        <div class="legend-row"><span class="mini">🌈</span>彩糖炸弹：与任意糖果交换，清除全场该颜色</div>
+      </div>
+      <p class="tip-note">右上角「关卡总览」可查看全部 30 关，通关后自动解锁下一关并保存进度。若盘面无可用交换会自动洗牌。道具每关各 2 次，重置关卡会补满。右上角可开关背景音乐与音效（首次点击页面后开始播放）。</p>
+    </aside>
+  </div>
+</div>
+
+<div id="levelsPanel" class="levels-panel hidden">
+  <div class="levels-dialog">
+    <div class="levels-head">
+      <h2>🗺️ 关卡总览</h2>
+      <button class="ghost" id="closeLevelsBtn">✕ 关闭</button>
+    </div>
+    <p class="levels-sub" id="levelsSub"></p>
+    <div class="levels-grid" id="levelsGrid"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  const COLS = 8, ROWS = 8;
+  const TYPES = [
+    { emoji: "🍓", bg: "#ff6f86", name: "草莓" },
+    { emoji: "🍋", bg: "#ffd45c", name: "柠檬" },
+    { emoji: "🍇", bg: "#b184f5", name: "葡萄" },
+    { emoji: "🍉", bg: "#5ed39b", name: "西瓜" },
+    { emoji: "🫐", bg: "#69a9f7", name: "蓝莓" },
+    { emoji: "🍑", bg: "#ffa56a", name: "蜜桃" }
+  ];
+  const BADGE = { hline: "↔", vline: "↕", wrapped: "✦", bomb: "★" };
+  const LEVELS = [
+    { moves: 20, goal: { kind: "collect", items: [{ type: 0, need: 12 }] } },
+    { moves: 22, goal: { kind: "score", target: 1500 } },
+    { moves: 24, goal: { kind: "collect", items: [{ type: 3, need: 14 }, { type: 4, need: 10 }] } }
+  ];
+
+  const board = document.getElementById("board");
+  const fx = document.getElementById("fx");
+  const toastEl = document.getElementById("toast");
+  const overlay = document.getElementById("overlay");
+  const levelVal = document.getElementById("levelVal");
+  const scoreVal = document.getElementById("scoreVal");
+  const movesVal = document.getElementById("movesVal");
+  const goalsEl = document.getElementById("goals");
+
+  let grid = [];
+  let uid = 0;
+  let selected = null;
+  let busy = false;
+  let level = 1;
+  let moves = 0;
+  let score = 0;
+  let goal = null;
+  let boosters = { hint: 2, shuffle: 2, extra: 2 };
+  let toastTimer = null;
+
+  // ===== 关卡进度（本地保存） =====
+  const STORE_KEY = "match3-progress-v1";
+  const TOTAL_LEVELS = 30;
+  let progress = loadProgress();
+  function loadProgress() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (p && typeof p.unlocked === "number") {
+          return { unlocked: Math.max(1, p.unlocked), cleared: p.cleared || {}, best: p.best || {} };
+        }
+      }
+    } catch (e) { /* 隐私模式或 file:// 限制时忽略 */ }
+    return { unlocked: 1, cleared: {}, best: {} };
+  }
+  function saveProgress() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(progress)); } catch (e) { /* 忽略 */ }
+  }
+  function recordClear(lv, finalScore) {
+    progress.cleared[lv] = true;
+    progress.best[lv] = Math.max(progress.best[lv] || 0, finalScore);
+    progress.unlocked = Math.max(progress.unlocked, Math.min(TOTAL_LEVELS, lv + 1));
+    saveProgress();
+  }
+
+  // ===== 音效与背景音乐（Web Audio 合成，无外部资源） =====
+  const Sound = (function () {
+    let ctx = null, master = null, musicGain = null, sfxGain = null;
+    let musicOn = true, sfxOn = true, musicTimer = null, melodyStep = 0, started = false;
+    const melody = [523.25, 587.33, 659.25, 783.99, 659.25, 587.33, 523.25, 440.00,
+                    493.88, 587.33, 659.25, 880.00, 783.99, 659.25, 587.33, 523.25];
+
+    function ensure() {
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+        master = ctx.createGain(); master.gain.value = 0.9; master.connect(ctx.destination);
+        musicGain = ctx.createGain(); musicGain.gain.value = 0.10; musicGain.connect(master);
+        sfxGain = ctx.createGain(); sfxGain.gain.value = 0.4; sfxGain.connect(master);
+      }
+      if (ctx.state === "suspended") ctx.resume();
+      return ctx;
+    }
+    function tone(freq, dur, opt) {
+      if (!ctx) return;
+      opt = opt || {};
+      const t0 = ctx.currentTime + (opt.delay || 0);
+      const osc = ctx.createOscillator();
+      const g = ctx.createGain();
+      osc.type = opt.type || "sine";
+      osc.frequency.setValueAtTime(freq, t0);
+      if (opt.slide) osc.frequency.exponentialRampToValueAtTime(Math.max(40, opt.slide), t0 + dur);
+      const vol = opt.vol == null ? 0.5 : opt.vol;
+      g.gain.setValueAtTime(0.0001, t0);
+      g.gain.exponentialRampToValueAtTime(vol, t0 + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(g); g.connect(opt.music ? musicGain : sfxGain);
+      osc.start(t0); osc.stop(t0 + dur + 0.02);
+    }
+    function musicTick() {
+      if (!musicOn || !ctx) return;
+      const f = melody[melodyStep % melody.length];
+      tone(f, 0.24, { type: "triangle", vol: 0.22, music: true });
+      if (melodyStep % 8 === 0) tone(130.81, 1.7, { type: "sine", vol: 0.16, music: true });
+      melodyStep++;
+    }
+    function startMusic() {
+      if (!musicOn || musicTimer || !ensure()) return;
+      started = true;
+      musicTick();
+      musicTimer = setInterval(musicTick, 290);
+    }
+    function stopMusic() {
+      if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+    }
+    return {
+      unlock() { if (musicOn) startMusic(); },
+      pop(n) {
+        if (!sfxOn || !ensure()) return;
+        const k = Math.min(n || 3, 10);
+        tone(600 + k * 22, 0.13, { type: "sine", slide: 980, vol: 0.45 });
+        tone(880 + k * 15, 0.09, { type: "triangle", vol: 0.22, delay: 0.04 });
+      },
+      combo(chain) {
+        if (!sfxOn || !ctx) return;
+        const base = 523.25 * Math.pow(1.12, Math.min(chain, 5));
+        [0, 1, 2].forEach(i => tone(base * Math.pow(1.26, i), 0.14, { type: "triangle", vol: 0.35, delay: i * 0.07 }));
+      },
+      swap() { if (sfxOn && ensure()) tone(440, 0.06, { type: "sine", vol: 0.18 }); },
+      invalid() { if (sfxOn && ensure()) tone(180, 0.18, { type: "sawtooth", slide: 120, vol: 0.14 }); },
+      special() {
+        if (!sfxOn || !ctx) return;
+        [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone(f, 0.1, { type: "sine", vol: 0.22, delay: i * 0.045 }));
+      },
+      bonus() {
+        if (!sfxOn || !ensure()) return;
+        [659.25, 783.99, 987.77].forEach((f, i) => tone(f, 0.16, { type: "triangle", vol: 0.3, delay: i * 0.09 }));
+      },
+      win() {
+        if (!sfxOn || !ensure()) return;
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => tone(f, 0.28, { type: "triangle", vol: 0.4, delay: i * 0.12 }));
+      },
+      lose() {
+        if (!sfxOn || !ensure()) return;
+        [392, 349.23, 293.66, 220].forEach((f, i) => tone(f, 0.3, { type: "sine", vol: 0.32, delay: i * 0.14 }));
+      },
+      toggleMusic() {
+        musicOn = !musicOn;
+        if (musicOn) { ensure(); startMusic(); } else stopMusic();
+        return musicOn;
+      },
+      toggleSfx() { sfxOn = !sfxOn; if (sfxOn) ensure(); return sfxOn; },
+      status() { return { musicOn, sfxOn, started, running: !!musicTimer }; }
+    };
+  })();
+
+  // 首次用户交互后再启动音频（浏览器自动播放策略）
+  document.addEventListener("pointerdown", function unlockOnce() {
+    Sound.unlock();
+    document.removeEventListener("pointerdown", unlockOnce);
+  }, { once: true });
+
+  const wait = (ms) => new Promise(res => setTimeout(res, ms));
+  const rnd = (n) => Math.floor(Math.random() * n);
+  const key = (r, c) => r + "," + c;
+  const parse = (k) => { const p = k.split(",").map(Number); return { r: p[0], c: p[1] }; };
+
+  function configFor(n) {
+    if (n <= LEVELS.length) return LEVELS[n - 1];
+    const extra = n - LEVELS.length;
+    const firstColor = rnd(TYPES.length);
+    let secondColor = rnd(TYPES.length);
+    while (secondColor === firstColor) secondColor = rnd(TYPES.length);
+    const moves = 24 + Math.min(10, extra * 2);
+    return {
+      moves: moves,
+      goal: extra % 2 === 0
+        ? { kind: "collect", items: [{ type: firstColor, need: 15 + extra * 2 }, { type: secondColor, need: 10 + extra }] }
+        : { kind: "score", target: 900 + extra * 200 }
+    };
+  }
+
+  function makeTile(type, row, col, special) {
+    const el = document.createElement("div");
+    el.className = "tile";
+    el.dataset.id = String(++uid);
+    const t = TYPES[type];
+    el.style.background = "linear-gradient(160deg, " + t.bg + ", " + shade(t.bg, -18) + ")";
+    const face = document.createElement("span");
+    face.className = "face";
+    face.textContent = type === -1 ? "🌈" : t.emoji;
+    el.appendChild(face);
+    if (special) {
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = BADGE[special];
+      el.appendChild(badge);
+    }
+    board.appendChild(el);
+    const tile = { id: uid, type, special: special || null, row, col, el };
+    positionTile(tile, row, col, false);
+    return tile;
+  }
+
+  function shade(hex, amt) {
+    const n = parseInt(hex.slice(1), 16);
+    const clamp = (v) => Math.max(0, Math.min(255, v));
+    return "#" + [clamp((n >> 16) + amt), clamp(((n >> 8) & 255) + amt), clamp((n & 255) + amt)]
+      .map(v => v.toString(16).padStart(2, "0")).join("");
+  }
+
+  function positionTile(tile, row, col, animate) {
+    if (!animate) tile.el.style.transition = "none";
+    tile.row = row; tile.col = col;
+    tile.el.style.left = "calc(" + col + " * (var(--cell) + var(--gap)))";
+    tile.el.style.top = "calc(" + row + " * (var(--cell) + var(--gap)))";
+    if (!animate) {
+      void tile.el.offsetWidth;
+      tile.el.style.transition = "";
+    }
+  }
+
+  function clearBoardDom() {
+    board.innerHTML = "";
+    fx.innerHTML = "";
+    grid = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+  }
+
+  function wouldMatchAt(row, col, type) {
+    if (col >= 2 && grid[row][col - 1] && grid[row][col - 2] &&
+        grid[row][col - 1].type === type && grid[row][col - 2].type === type) return true;
+    if (row >= 2 && grid[row - 1][col] && grid[row - 2][col] &&
+        grid[row - 1][col].type === type && grid[row - 2][col].type === type) return true;
+    return false;
+  }
+
+  function buildBoard() {
+    clearBoardDom();
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        let type;
+        do { type = rnd(TYPES.length); } while (wouldMatchAt(r, c, type));
+        grid[r][c] = makeTile(type, r, c);
+      }
+    }
+    if (!findValidSwap()) buildBoard();
+  }
+
+  function findMatches() {
+    const cells = new Set();
+    const runs = [];
+    for (let r = 0; r < ROWS; r++) {
+      let c = 0;
+      while (c < COLS) {
+        const t = grid[r][c];
+        if (!t) { c++; continue; }
+        let e = c + 1;
+        while (e < COLS && grid[r][e] && grid[r][e].type === t.type) e++;
+        if (e - c >= 3) {
+          const run = { dir: "h", type: t.type, cells: [] };
+          for (let k = c; k < e; k++) { run.cells.push([r, k]); cells.add(key(r, k)); }
+          runs.push(run);
+        }
+        c = e;
+      }
+    }
+    for (let c = 0; c < COLS; c++) {
+      let r = 0;
+      while (r < ROWS) {
+        const t = grid[r][c];
+        if (!t) { r++; continue; }
+        let e = r + 1;
+        while (e < ROWS && grid[e][c] && grid[e][c].type === t.type) e++;
+        if (e - r >= 3) {
+          const run = { dir: "v", type: t.type, cells: [] };
+          for (let k = r; k < e; k++) { run.cells.push([k, c]); cells.add(key(k, c)); }
+          runs.push(run);
+        }
+        r = e;
+      }
+    }
+    return { cells, runs };
+  }
+
+  function validSwapByData(a, b) {
+    const tmp = grid[a.row][a.col];
+    grid[a.row][a.col] = grid[b.row][b.col];
+    grid[b.row][b.col] = tmp;
+    const ar = a.row, ac = a.col, br = b.row, bc = b.col;
+    a.row = br; a.col = bc; b.row = ar; b.col = ac;
+    const ok = findMatches().cells.size > 0 || a.special === "bomb" || b.special === "bomb" || (a.special && b.special);
+    a.row = ar; a.col = ac; b.row = br; b.col = bc;
+    grid[ar][ac] = a; grid[br][bc] = b;
+    return ok;
+  }
+
+  function findValidSwap() {
+    for (let r = 0; r < ROWS; r++) {
+      for (let c = 0; c < COLS; c++) {
+        const a = grid[r][c];
+        if (!a) continue;
+        if (c + 1 < COLS && validSwapByData(a, grid[r][c + 1])) return [a, grid[r][c + 1]];
+        if (r + 1 < ROWS && validSwapByData(a, grid[r + 1][c])) return [a, grid[r + 1][c]];
+      }
+    }
+    return null;
+  }
+
+  function swapTiles(a, b) {
+    const ar = a.row, ac = a.col, br = b.row, bc = b.col;
+    grid[ar][ac] = b; grid[br][bc] = a;
+    positionTile(a, br, bc, true);
+    positionTile(b, ar, ac, true);
+  }
+
+  function planSpecials(runs, preferred) {
+    const plan = new Map();
+    const pick = (cells) => {
+      if (preferred && cells.some(p => p[0] === preferred.row && p[1] === preferred.col)) return key(preferred.row, preferred.col);
+      const mid = cells[Math.floor(cells.length / 2)];
+      return key(mid[0], mid[1]);
+    };
+    for (const run of runs) {
+      const k = pick(run.cells);
+      if (run.cells.length >= 5) plan.set(k, "bomb");
+      else if (run.cells.length === 4 && !plan.has(k)) plan.set(k, run.dir === "h" ? "hline" : "vline");
+    }
+    for (const h of runs.filter(x => x.dir === "h")) {
+      for (const v of runs.filter(x => x.dir === "v")) {
+        if (h.type !== v.type) continue;
+        for (const [r, c] of h.cells) {
+          if (v.cells.some(p => p[0] === r && p[1] === c)) {
+            const k = key(r, c);
+            if (plan.get(k) !== "bomb") plan.set(k, "wrapped");
+          }
+        }
+      }
+    }
+    return plan;
+  }
+
+  function mostCommonType(cellSet) {
+    const counts = {};
+    for (const k of cellSet) {
+      const { r, c } = parse(k);
+      const t = grid[r][c];
+      if (t && t.type >= 0) counts[t.type] = (counts[t.type] || 0) + 1;
+    }
+    let best = -1, n = 0;
+    for (const type in counts) if (counts[type] > n) { n = counts[type]; best = Number(type); }
+    return best;
+  }
+
+  function expandSpecials(cellSet, bombColor) {
+    const processed = new Set();
+    let changed = true;
+    while (changed) {
+      changed = false;
+      for (const k of Array.from(cellSet)) {
+        if (processed.has(k)) continue;
+        processed.add(k);
+        const { r, c } = parse(k);
+        const tile = grid[r][c];
+        if (!tile || !tile.special) continue;
+        const affected = [];
+        if (tile.special === "hline") for (let cc = 0; cc < COLS; cc++) affected.push([r, cc]);
+        if (tile.special === "vline") for (let rr = 0; rr < ROWS; rr++) affected.push([rr, c]);
+        if (tile.special === "wrapped") {
+          for (let rr = r - 1; rr <= r + 1; rr++) for (let cc = c - 1; cc <= c + 1; cc++)
+            if (rr >= 0 && rr < ROWS && cc >= 0 && cc < COLS) affected.push([rr, cc]);
+        }
+        if (tile.special === "bomb") {
+          for (let rr = 0; rr < ROWS; rr++) for (let cc = 0; cc < COLS; cc++) {
+            const t2 = grid[rr][cc];
+            if (bombColor === null || (t2 && t2.type === bombColor)) affected.push([rr, cc]);
+          }
+        }
+        for (const [rr, cc] of affected) {
+          const kk = key(rr, cc);
+          if (!cellSet.has(kk)) { cellSet.add(kk); changed = true; }
+        }
+      }
+    }
+    return cellSet;
+  }
+
+  function centroid(cellSet) {
+    let r = 0, c = 0, n = 0;
+    for (const k of cellSet) { const p = parse(k); r += p.r; c += p.c; n++; }
+    return n ? { r: r / n, c: c / n } : { r: ROWS / 2, c: COLS / 2 };
+  }
+
+  function floatScore(points, pos) {
+    const el = document.createElement("div");
+    el.className = "float-score";
+    el.textContent = "+" + points;
+    el.style.left = "calc(" + (pos.c + .5) + " * (var(--cell) + var(--gap)) - var(--gap) / 2)";
+    el.style.top = "calc(" + pos.r + " * (var(--cell) + var(--gap)) + var(--cell) / 2)";
+    fx.appendChild(el);
+    setTimeout(() => el.remove(), 950);
+  }
+
+  function comboBanner(chain) {
+    const el = document.createElement("div");
+    el.className = "combo-banner";
+    el.textContent = "连锁 x" + chain + "!";
+    fx.appendChild(el);
+    setTimeout(() => el.remove(), 850);
+  }
+
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toastEl.classList.remove("show"), 1500);
+  }
+
+  function addScore(points) {
+    score += points;
+    scoreVal.textContent = score.toLocaleString();
+    scoreVal.classList.remove("pulse");
+    void scoreVal.offsetWidth;
+    scoreVal.classList.add("pulse");
+    renderGoals();
+  }
+
+  function renderGoals() {
+    if (!goal) return;
+    if (goal.kind === "score") {
+      goalsEl.innerHTML = '<span class="goal-chip" id="scoreGoal">🏆 得分 <b>' +
+        Math.min(score, goal.target).toLocaleString() + " / " + goal.target.toLocaleString() + "</b></span>";
+      return;
+    }
+    goalsEl.innerHTML = goal.items.map((item, i) => {
+      const done = item.got >= item.need;
+      return '<span class="goal-chip' + (done ? " done" : "") + '">' +
+        TYPES[item.type].emoji + " " + TYPES[item.type].name +
+        " <b>" + Math.min(item.got, item.need) + "/" + item.need + "</b>" + (done ? " ✓" : "") + "</span>";
+    }).join("");
+  }
+
+  function consumeCleared(cellSet) {
+    if (goal.kind === "score") return;
+    for (const k of cellSet) {
+      const { r, c } = parse(k);
+      const t = grid[r][c];
+      if (!t) continue;
+      const item = goal.items.find(g => g.type === t.type);
+      if (item) item.got++;
+    }
+  }
+
+  async function clearAndRefill(cellSet, plan) {
+    for (const k of cellSet) {
+      const { r, c } = parse(k);
+      const t = grid[r][c];
+      if (t) t.el.classList.add("clearing");
+    }
+    await wait(260);
+
+    for (const k of cellSet) {
+      const { r, c } = parse(k);
+      const t = grid[r][c];
+      if (t) { t.el.remove(); grid[r][c] = null; }
+    }
+    for (const [k, special] of plan.entries()) {
+      const { r, c } = parse(k);
+      const t = grid[r][c];
+      if (!t) continue;
+      t.special = special;
+      t.el.innerHTML = "";
+      const face = document.createElement("span");
+      face.className = "face";
+      face.textContent = special === "bomb" ? "🌈" : TYPES[t.type].emoji;
+      t.el.appendChild(face);
+      const badge = document.createElement("span");
+      badge.className = "badge";
+      badge.textContent = BADGE[special];
+      t.el.appendChild(badge);
+      t.el.classList.remove("clearing");
+      t.el.classList.add("special-make");
+      setTimeout(() => t.el.classList.remove("special-make"), 450);
+    }
+
+    for (let c = 0; c < COLS; c++) {
+      const survivors = [];
+      for (let r = ROWS - 1; r >= 0; r--) if (grid[r][c]) survivors.push(grid[r][c]);
+      let r = ROWS - 1;
+      for (const t of survivors) { positionTile(t, r, c, true); grid[r][c] = t; r--; }
+      let above = 1;
+      while (r >= 0) {
+        const type = rnd(TYPES.length);
+        const t = makeTile(type, -above, c, null);
+        grid[r][c] = t;
+        positionTile(t, r, c, true);
+        t.el.classList.add("spawn");
+        setTimeout(() => t.el.classList.remove("spawn"), 320);
+        r--; above++;
+      }
+    }
+    await wait(340);
+  }
+
+  async function cascadeLoop(firstSwap) {
+    let chain = 0;
+    let preferred = firstSwap || null;
+    while (true) {
+      const { cells, runs } = findMatches();
+      if (!cells.size) break;
+      chain++;
+      const plan = planSpecials(runs, preferred);
+      preferred = null;
+      for (const k of plan.keys()) cells.delete(k);
+      const bombColor = mostCommonType(cells);
+      const cleared = expandSpecials(cells, bombColor);
+      // 特殊糖果生成格必须保留，不能被连锁/特殊效果顺带清掉
+      for (const k of plan.keys()) cleared.delete(k);
+      consumeCleared(cleared);
+      const gained = cleared.size * 10 * chain + plan.size * 50;
+      addScore(gained);
+      floatScore(gained, centroid(cleared));
+      Sound.pop(cleared.size);
+      if (chain > 1) { comboBanner(chain); Sound.combo(chain); }
+      if (plan.size) Sound.special();
+      await clearAndRefill(cleared, plan);
+    }
+  }
+
+  function adjacent(a, b) {
+    return Math.abs(a.row - b.row) + Math.abs(a.col - b.col) === 1;
+  }
+
+  async function attemptSwap(a, b) {
+    if (busy || !a || !b || !adjacent(a, b)) return;
+    busy = true;
+    clearSelection();
+    swapTiles(a, b);
+    Sound.swap();
+    await wait(200);
+
+    const bombInvolved = a.special === "bomb" || b.special === "bomb" ||
+      (a.special && b.special);
+    const matched = findMatches().cells.size > 0;
+    if (!matched && !bombInvolved) {
+      swapTiles(a, b);
+      await wait(200);
+      Sound.invalid();
+      toast("这样交换不能消除哦");
+      busy = false;
+      return;
+    }
+
+    moves--;
+    movesVal.textContent = moves;
+    renderGoals();
+
+    if (bombInvolved) {
+      const set = new Set([key(a.row, a.col), key(b.row, b.col)]);
+      let color;
+      if (a.special === "bomb" && b.special === "bomb") color = null;
+      else if (a.special === "bomb") color = b.type >= 0 ? b.type : mostCommonType(set);
+      else color = a.type >= 0 ? a.type : mostCommonType(set);
+      expandSpecials(set, color);
+      consumeCleared(set);
+      const gained = set.size * 12;
+      addScore(gained);
+      floatScore(gained, centroid(set));
+      Sound.pop(set.size);
+      Sound.special();
+      comboBanner(set.size > 12 ? "全屏消除!" : "特殊消除!");
+      await clearAndRefill(set, new Map());
+      await cascadeLoop(null);
+    } else {
+      await cascadeLoop({ row: b.row, col: b.col });
+    }
+
+    await finishTurn();
+    busy = false;
+  }
+
+  async function finishTurn() {
+    renderGoals();
+    const complete = goal.kind === "score"
+      ? score >= goal.target
+      : goal.items.every(g => g.got >= g.need);
+    if (complete) { recordClear(level, score); showOverlay(true); return; }
+    if (moves <= 0) { showOverlay(false); return; }
+    if (!findValidSwap()) {
+      toast("没有可消除的组合，自动洗牌");
+      await wait(400);
+      shuffleTiles(false);
+    }
+  }
+
+  function showOverlay(won) {
+    if (won) Sound.win(); else Sound.lose();
+    document.getElementById("ovIcon").textContent = won ? "🏆" : "😵";
+    document.getElementById("ovTitle").textContent = won ? "恭喜过关！" : "步数用完了";
+    document.getElementById("ovText").textContent = won
+      ? "第 " + level + " 关完成，得分 " + score.toLocaleString() + "。"
+      : "还差一点目标，试试特殊糖果和道具再挑战一次。";
+    const primary = document.getElementById("ovPrimary");
+    primary.textContent = won ? "下一关 →" : "再试一次";
+    primary.onclick = () => {
+      overlay.classList.add("hidden");
+      if (won) { level++; startLevel(); }
+      else startLevel();
+    };
+    document.getElementById("ovSecondary").onclick = () => {
+      overlay.classList.add("hidden");
+      startLevel();
+    };
+    document.getElementById("ovLevelsBtn").onclick = () => {
+      overlay.classList.add("hidden");
+      openLevels();
+    };
+    overlay.classList.remove("hidden");
+  }
+
+  function openLevels() {
+    const gridEl = document.getElementById("levelsGrid");
+    const count = Object.keys(progress.cleared).length;
+    document.getElementById("levelsSub").textContent =
+      "已通关 " + count + " 关 · 已解锁至第 " + progress.unlocked + " 关（通关后自动解锁下一关，进度保存在本机）";
+    let html = "";
+    for (let n = 1; n <= TOTAL_LEVELS; n++) {
+      const done = !!progress.cleared[n];
+      const locked = n > progress.unlocked;
+      const cls = locked ? "locked" : done ? "done" : (n === level ? "current" : "");
+      const stars = done ? "★★★" : locked ? "🔒" : (n === level ? "当前" : "可挑战");
+      const best = done && progress.best[n] ? progress.best[n].toLocaleString() + "分" : "";
+      html += '<div class="level-cell ' + cls + '" data-level="' + n + '">' +
+        '<span class="num">' + n + "</span>" +
+        '<span class="stars">' + stars + "</span>" +
+        '<span class="score">' + best + "</span></div>";
+    }
+    gridEl.innerHTML = html;
+    document.getElementById("levelsPanel").classList.remove("hidden");
+  }
+
+  function clearSelection() {
+    if (selected) selected.el.classList.remove("selected");
+    selected = null;
+  }
+
+  function selectTile(tile) {
+    if (selected === tile) { clearSelection(); return; }
+    if (!selected) {
+      selected = tile;
+      tile.el.classList.add("selected");
+      return;
+    }
+    if (adjacent(selected, tile)) {
+      const a = selected;
+      clearSelection();
+      attemptSwap(a, tile);
+    } else {
+      clearSelection();
+      selected = tile;
+      tile.el.classList.add("selected");
+    }
+  }
+
+  function tileFromEvent(e) {
+    const el = e.target.closest(".tile");
+    if (!el) return null;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
+      if (grid[r][c] && grid[r][c].el === el) return grid[r][c];
+    return null;
+  }
+
+  let dragStart = null;
+  let suppressClick = false;
+  board.addEventListener("pointerdown", (e) => {
+    if (busy) return;
+    const t = tileFromEvent(e);
+    if (t) dragStart = t;
+  });
+  board.addEventListener("pointerup", (e) => {
+    if (busy || !dragStart) return;
+    const t = tileFromEvent(e);
+    const start = dragStart;
+    dragStart = null;
+    if (!t || t === start) return;
+    if (adjacent(start, t)) {
+      suppressClick = true;
+      clearSelection();
+      attemptSwap(start, t);
+    }
+  });
+  board.addEventListener("pointercancel", () => { dragStart = null; });
+  board.addEventListener("click", (e) => {
+    if (suppressClick) { suppressClick = false; return; }
+    if (busy) return;
+    const t = tileFromEvent(e);
+    if (t) selectTile(t);
+  });
+
+  function showHint() {
+    if (boosters.hint <= 0 || busy) return;
+    const pair = findValidSwap();
+    if (!pair) { toast("当前没有可交换的组合"); return; }
+    boosters.hint--;
+    document.getElementById("hintCount").textContent = boosters.hint;
+    document.getElementById("hintBtn").disabled = boosters.hint <= 0;
+    pair.forEach(t => { t.el.classList.add("hint"); setTimeout(() => t.el.classList.remove("hint"), 1450); });
+  }
+
+  function shuffleTiles(useBooster) {
+    if (busy) return;
+    if (useBooster) {
+      if (boosters.shuffle <= 0) return;
+      boosters.shuffle--;
+      document.getElementById("shuffleCount").textContent = boosters.shuffle;
+      document.getElementById("shuffleBtn").disabled = boosters.shuffle <= 0;
+    }
+    clearSelection();
+    let types = grid.flat().filter(Boolean).map(t => t.type);
+    let ok = false;
+    let attempt = 0;
+    while (!ok && attempt < 100) {
+      attempt++;
+      for (let i = types.length - 1; i > 0; i--) { const j = rnd(i + 1); const tmp = types[i]; types[i] = types[j]; types[j] = tmp; }
+      let i = 0;
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const t = grid[r][c];
+        t.type = types[i++];
+        t.special = null;
+        t.el.innerHTML = '<span class="face">' + TYPES[t.type].emoji + "</span>";
+        t.el.style.background = "linear-gradient(160deg, " + TYPES[t.type].bg + ", " + shade(TYPES[t.type].bg, -18) + ")";
+      }
+      ok = findMatches().cells.size === 0 && !!findValidSwap();
+    }
+    Sound.bonus();
+    toast("棋盘已重新洗牌");
+  }
+
+  function addExtraMoves() {
+    if (boosters.extra <= 0 || busy) return;
+    boosters.extra--;
+    document.getElementById("extraCount").textContent = boosters.extra;
+    document.getElementById("extraBtn").disabled = boosters.extra <= 0;
+    moves += 5;
+    movesVal.textContent = moves;
+    Sound.bonus();
+    toast("步数 +5");
+  }
+
+  function startLevel() {
+    const cfg = configFor(level);
+    moves = cfg.moves;
+    score = 0;
+    goal = JSON.parse(JSON.stringify(cfg.goal));
+    goal.items && goal.items.forEach(g => { g.got = 0; });
+    boosters = { hint: 2, shuffle: 2, extra: 2 };
+    ["hint", "shuffle", "extra"].forEach(k => {
+      const btn = document.getElementById(k + "Count");
+      btn.textContent = "2";
+      document.getElementById(k + "Btn").disabled = false;
+    });
+    levelVal.textContent = level;
+    scoreVal.textContent = "0";
+    movesVal.textContent = moves;
+    selected = null;
+    busy = false;
+    overlay.classList.add("hidden");
+    buildBoard();
+    renderGoals();
+  }
+
+  document.getElementById("restartBtn").onclick = () => startLevel();
+  document.getElementById("levelsBtn").onclick = openLevels;
+  document.getElementById("closeLevelsBtn").onclick = () => document.getElementById("levelsPanel").classList.add("hidden");
+  document.getElementById("levelsGrid").addEventListener("click", (e) => {
+    const cell = e.target.closest(".level-cell");
+    if (!cell || cell.classList.contains("locked")) return;
+    document.getElementById("levelsPanel").classList.add("hidden");
+    level = Number(cell.dataset.level);
+    startLevel();
+  });
+  document.getElementById("hintBtn").onclick = showHint;
+  document.getElementById("shuffleBtn").onclick = () => shuffleTiles(true);
+  document.getElementById("extraBtn").onclick = addExtraMoves;
+  document.getElementById("musicBtn").onclick = (e) => {
+    const on = Sound.toggleMusic();
+    e.currentTarget.textContent = on ? "🎵 音乐开" : "🎵 音乐关";
+    e.currentTarget.classList.toggle("off", !on);
+  };
+  document.getElementById("soundBtn").onclick = (e) => {
+    const on = Sound.toggleSfx();
+    e.currentTarget.textContent = on ? "🔊 音效开" : "🔇 音效关";
+    e.currentTarget.classList.toggle("off", !on);
+  };
+
+  window.__match3 = {
+    state: () => ({ level, score, moves, goal: JSON.parse(JSON.stringify(goal)), boosters: { ...boosters }, busy }),
+    grid: () => grid.map(row => row.map(t => t ? { type: t.type, special: t.special, row: t.row, col: t.col } : null)),
+    validSwap: () => { const p = findValidSwap(); return p ? [{ row: p[0].row, col: p[0].col }, { row: p[1].row, col: p[1].col }] : null; },
+    startLevel: startLevel,
+    gotoLevel: (n) => { level = n; startLevel(); },
+    progress: () => JSON.parse(JSON.stringify(progress)),
+    resetProgress: () => { progress = { unlocked: 1, cleared: {}, best: {} }; saveProgress(); },
+    audio: () => Sound.status(),
+    swap: (r1, c1, r2, c2) => attemptSwap(grid[r1][c1], grid[r2][c2])
+  };
+
+  startLevel();
+})();
+</script>
+</body>
+</html>
